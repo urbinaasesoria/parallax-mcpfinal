@@ -1,0 +1,31 @@
+{
+  "name": "parallax-mcp",
+  "version": "1.0.0",
+  "description": "Model Context Protocol (MCP) server for PARALLAX AI Studio — Cinematic Multi-Model Generation for Claude Code, Cursor, Antigravity, OpenCode, Codex and DeepSeek.",
+  "type": "module",
+  "main": "./bin/index.mjs",
+  "bin": {
+    "parallax-mcp": "./bin/index.mjs"
+  },
+  "scripts": {
+    "start": "node ./bin/index.mjs"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "parallax",
+    "higgsfield",
+    "ai-video",
+    "ai-image",
+    "fal",
+    "replicate",
+    "muapi",
+    "claude",
+    "cursor"
+  ],
+  "author": "URBINA ASESORIA E INVERSIONES SAC",
+  "license": "MIT",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.1.0"
+  }
+}
