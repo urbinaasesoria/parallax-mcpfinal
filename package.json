@@ -1,6 +1,6 @@
 {
   "name": "parallax-mcp",
-  "version": "1.0.0",
+  "version": "1.2.0",
   "description": "Model Context Protocol (MCP) server for PARALLAX AI Studio — Cinematic Multi-Model Generation for Claude Code, Cursor, Antigravity, OpenCode, Codex and DeepSeek.",
   "type": "module",
   "main": "./bin/index.mjs",
