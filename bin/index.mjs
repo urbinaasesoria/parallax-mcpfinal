@@ -17,7 +17,7 @@ import {
   ReadResourceRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
 
-const VERSION = "1.2.0";
+const VERSION = "1.2.1";
 const PARALLAX_URL = (process.env.PARALLAX_URL || "https://parallax-studio-two.vercel.app").replace(/\/$/, "");
 const PARALLAX_API_KEY = process.env.PARALLAX_API_KEY || "urbina2026";
 const PARALLAX_IMAGE_RESOLUTION = process.env.PARALLAX_IMAGE_RESOLUTION || "2K";
@@ -30,7 +30,7 @@ const PARALLAX_REQUEST_TIMEOUT_MS = Number(process.env.PARALLAX_REQUEST_TIMEOUT_
 let cachedModels = null;
 let cachedModelsTimestamp = 0;
 
-async function apiRequest(path, options = {}) {
+async function apiRequest(path, options = {}, retries = 2) {
   const url = `${PARALLAX_URL}${path}`;
   const headers = {
     "Content-Type": "application/json",
@@ -43,12 +43,22 @@ async function apiRequest(path, options = {}) {
   try {
     response = await fetch(url, { ...options, headers, signal });
   } catch (netErr) {
+    if (retries > 0) {
+      await new Promise((r) => setTimeout(r, 1000));
+      return apiRequest(path, options, retries - 1);
+    }
     throw new Error(`Fallo de conexión HTTP con ${url}: ${netErr.message}`);
   }
 
   const data = await response.json().catch(() => null);
 
   if (!response.ok) {
+    // Si es un 404 transitorio (race condition al crear el job) o error 5xx, reintentar automáticamente
+    if ((response.status === 404 || response.status >= 500) && retries > 0) {
+      await new Promise((r) => setTimeout(r, 1200));
+      return apiRequest(path, options, retries - 1);
+    }
+
     let details = "";
     if (Array.isArray(data?.error?.details)) {
       details = " → " + data.error.details.map((d) => `${d.path ?? "?"}: ${d.message ?? ""}`).join("; ");
@@ -474,8 +484,17 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         }
 
         await new Promise((r) => setTimeout(r, 2500));
-        const polled = await apiRequest(`/api/v1/jobs/${job.id}`);
-        currentJob = polled.job;
+        try {
+          const polled = await apiRequest(`/api/v1/jobs/${job.id}`);
+          if (polled?.job) {
+            currentJob = polled.job;
+          }
+        } catch (pollErr) {
+          if (Date.now() - startTime < 15000) {
+            continue;
+          }
+          throw pollErr;
+        }
       }
 
       return {
@@ -590,8 +609,17 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         }
 
         await new Promise((r) => setTimeout(r, 4000));
-        const polled = await apiRequest(`/api/v1/jobs/${job.id}`);
-        currentJob = polled.job;
+        try {
+          const polled = await apiRequest(`/api/v1/jobs/${job.id}`);
+          if (polled?.job) {
+            currentJob = polled.job;
+          }
+        } catch (pollErr) {
+          if (Date.now() - startTime < 15000) {
+            continue;
+          }
+          throw pollErr;
+        }
       }
 
       return {
