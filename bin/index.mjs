@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * PARALLAX MCP Server (Model Context Protocol) v1.2.0
+ * PARALLAX MCP Server (Model Context Protocol) v1.3.0
  * 
  * Permite a cualquier agente de IA (Claude Code, Cursor, Antigravity, OpenCode, Codex, DeepSeek Harness)
  * orquestar generaciones de imágenes y videos cinemáticos a través de PARALLAX AI Studio.
@@ -17,7 +17,7 @@ import {
   ReadResourceRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
 
-const VERSION = "1.2.1";
+const VERSION = "1.3.0";
 const PARALLAX_URL = (process.env.PARALLAX_URL || "https://parallax-studio-two.vercel.app").replace(/\/$/, "");
 const PARALLAX_API_KEY = process.env.PARALLAX_API_KEY || "urbina2026";
 const PARALLAX_IMAGE_RESOLUTION = process.env.PARALLAX_IMAGE_RESOLUTION || "2K";
@@ -26,8 +26,9 @@ const PARALLAX_IMAGE_TIMEOUT_MS = Number(process.env.PARALLAX_IMAGE_TIMEOUT_MS) 
 const PARALLAX_VIDEO_TIMEOUT_MS = Number(process.env.PARALLAX_VIDEO_TIMEOUT_MS) || 600_000; // 10m
 const PARALLAX_REQUEST_TIMEOUT_MS = Number(process.env.PARALLAX_REQUEST_TIMEOUT_MS) || 30_000;
 
-// Caché de modelos en memoria (TTL: 5 min)
+// Caché de modelos y presets en memoria (TTL: 5 min)
 let cachedModels = null;
+let cachedCatalogPayload = null;
 let cachedModelsTimestamp = 0;
 
 async function apiRequest(path, options = {}, retries = 2) {
@@ -76,19 +77,25 @@ async function apiRequest(path, options = {}, retries = 2) {
   return data;
 }
 
-async function getCachedModels() {
+async function getCachedCatalog() {
   const now = Date.now();
-  if (cachedModels && now - cachedModelsTimestamp < 300_000) {
-    return cachedModels;
+  if (cachedCatalogPayload && now - cachedModelsTimestamp < 300_000) {
+    return cachedCatalogPayload;
   }
   try {
     const data = await apiRequest("/api/v1/models");
+    cachedCatalogPayload = data;
     cachedModels = data.models || [];
     cachedModelsTimestamp = now;
-    return cachedModels;
+    return data;
   } catch {
-    return cachedModels || [];
+    return cachedCatalogPayload || { models: cachedModels || [] };
   }
+}
+
+async function getCachedModels() {
+  const data = await getCachedCatalog();
+  return data.models || [];
 }
 
 async function resolveDefaultVideoModel() {
@@ -153,6 +160,18 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
               type: "string",
               description: "URL de una imagen existente para modo Image-to-Image / referencia de personaje o estilo.",
             },
+            assistedLook: {
+              type: "string",
+              enum: ["cyber-neon", "intimate-drama", "blockbuster-epic", "thriller-noir", "indie-doc", "kinetic-action"],
+              description:
+                "Estilo visual del Modo Asistido de Cinema Studio (compila automáticamente cuerpo de cámara, lente, iluminación y grano fotoquímico).",
+            },
+            shotFraming: {
+              type: "string",
+              enum: ["wide", "medium", "closeup"],
+              description:
+                "Encuadre óptico intuitivo: 'wide' (Plano General 24mm f/11), 'medium' (Plano Medio 35mm f/2.8), 'closeup' (Primer Plano 85mm f/1.4).",
+            },
             waitForCompletion: {
               type: "boolean",
               description:
@@ -165,7 +184,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       {
         name: "parallax_generate_video",
         description:
-          "Genera un video cinemático con IA (Text-to-Video o Image-to-Video) a través de PARALLAX Studio (modelos Hailuo, Seedance, WAN, Kling, Sora 2, Veo 3.1). Permite definir movimiento de cámara, imagen inicial (start_frame), imagen final (end_frame) y referencia de personaje.",
+          "Genera un video cinemático con IA (Text-to-Video o Image-to-Video) a través de PARALLAX Studio (modelos Hailuo, Seedance, WAN, Kling, Sora 2, Veo 3.1). Permite definir movimiento de cámara, Modo Asistido óptico (assistedLook/shotFraming), imagen inicial (start_frame), imagen final (end_frame) y referencia de personaje.",
         inputSchema: {
           type: "object",
           properties: {
@@ -185,7 +204,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
             },
             aspectRatio: {
               type: "string",
-              enum: ["16:9", "9:16", "1:1", "4:3", "3:4"],
+              enum: ["16:9", "9:16", "1:1", "4:3", "3:4", "21:9"],
               description: "Relación de aspecto del video. Por defecto '16:9'.",
             },
             resolution: {
@@ -205,6 +224,18 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
               type: "string",
               description: "URL opcional de referencia de personaje (character_reference) para mantener consistencia de identidad.",
             },
+            assistedLook: {
+              type: "string",
+              enum: ["cyber-neon", "intimate-drama", "blockbuster-epic", "thriller-noir", "indie-doc", "kinetic-action"],
+              description:
+                "Estilo visual del Modo Asistido de Cinema Studio (compila automáticamente cuerpo de cámara, lente, iluminación y movimiento).",
+            },
+            shotFraming: {
+              type: "string",
+              enum: ["wide", "medium", "closeup"],
+              description:
+                "Encuadre óptico intuitivo: 'wide' (Plano General 24mm f/11), 'medium' (Plano Medio 35mm f/2.8), 'closeup' (Primer Plano 85mm f/1.4).",
+            },
             waitForCompletion: {
               type: "boolean",
               description:
@@ -215,9 +246,42 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
         },
       },
       {
+        name: "parallax_retry_job",
+        description:
+          "Reintenta un trabajo fallido (jobId) o ejecuta una Conmutación Inteligente por Falla (Fallback en 1 clic) enrutando el mismo plano, prompt y fotogramas hacia un modelo alternativo compatible (fallbackModelId).",
+        inputSchema: {
+          type: "object",
+          properties: {
+            jobId: {
+              type: "string",
+              description: "ID del trabajo fallido (ej: 'job_...').",
+            },
+            fallbackModelId: {
+              type: "string",
+              description:
+                "ID opcional del modelo alternativo al que conmutar el plano (ej: 'flux-2-pro', 'seedance-2.5', 'veo3.1'). Si se omite, reintenta en el mismo modelo.",
+            },
+            waitForCompletion: {
+              type: "boolean",
+              description: "Si es true (por defecto), espera hasta que el reintento/conmutación termine y devuelve las URLs finales.",
+            },
+          },
+          required: ["jobId"],
+        },
+      },
+      {
+        name: "parallax_list_cinema_looks",
+        description:
+          "Devuelve los estilos ópticos del Modo Asistido de Cinema Studio (assistedLooks), las opciones de encuadre intuitivo (shotFramings: Plano General, Medio, Primer Plano) y los presets de cámara física con su explicación en lenguaje claro.",
+        inputSchema: {
+          type: "object",
+          properties: {},
+        },
+      },
+      {
         name: "parallax_list_models",
         description:
-          "Lista los modelos de IA disponibles en PARALLAX Studio para generación de imagen y video, detallando proveedor, modos admitidos (t2i, i2v, etc.), resoluciones, duraciones y roles de referencia.",
+          "Lista los modelos de IA disponibles en PARALLAX Studio para generación de imagen y video, o sugiere motores alternativos compatibles (fallbackFor) cuando un proveedor presenta latencia o fallos.",
         inputSchema: {
           type: "object",
           properties: {
@@ -225,6 +289,10 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
               type: "string",
               enum: ["image", "video", "all"],
               description: "Filtrar por tipo de modelo ('image', 'video' o 'all'). Por defecto 'all'.",
+            },
+            fallbackFor: {
+              type: "string",
+              description: "Opcional: ID de un modelo para obtener hasta 3 motores alternativos compatibles recomendados (conmutación por falla).",
             },
           },
         },
@@ -282,6 +350,26 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
   try {
     if (name === "parallax_list_models") {
+      if (args?.fallbackFor) {
+        const qs = new URLSearchParams({ fallbackFor: String(args.fallbackFor) });
+        const data = await apiRequest(`/api/v1/models?${qs.toString()}`);
+        return {
+          content: [
+            {
+              type: "text",
+              text: JSON.stringify(
+                {
+                  fallbackFor: args.fallbackFor,
+                  fallbackModels: data.fallbackModels || [],
+                },
+                null,
+                2
+              ),
+            },
+          ],
+        };
+      }
+
       const models = await getCachedModels();
       let filtered = models;
       if (args?.kind && args.kind !== "all") {
@@ -304,8 +392,122 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                   resolutions: m.allowedResolutions,
                   durations: m.allowedDurations,
                   supportedRoles: m.supportedRoles || [],
+                  creditCostBase: m.creditCostBase,
+                  featured: m.featured,
                   description: m.description,
                 })),
+              },
+              null,
+              2
+            ),
+          },
+        ],
+      };
+    }
+
+    if (name === "parallax_list_cinema_looks") {
+      const catalog = await getCachedCatalog();
+      return {
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify(
+              {
+                assistedLooks: catalog.assistedLooks || [],
+                shotFramings: catalog.shotFramings || [],
+                cinemaPresets: catalog.cinemaPresets || [],
+              },
+              null,
+              2
+            ),
+          },
+        ],
+      };
+    }
+
+    if (name === "parallax_retry_job") {
+      const retryData = await apiRequest(`/api/v1/jobs/${args.jobId}/retry`, {
+        method: "POST",
+        body: JSON.stringify(args.fallbackModelId ? { modelId: args.fallbackModelId } : {}),
+      });
+      let currentJob = retryData.job;
+      const shouldWait = args.waitForCompletion !== false;
+
+      if (!shouldWait) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: JSON.stringify(
+                {
+                  status: currentJob.status,
+                  jobId: currentJob.id,
+                  modelId: currentJob.modelId,
+                  modelName: currentJob.modelName,
+                  costeCreditos: currentJob.cost?.credits,
+                  mensaje: args.fallbackModelId
+                    ? `Plano conmutado exitosamente a ${currentJob.modelName}.`
+                    : `Reintento enviado en ${currentJob.modelName}.`,
+                },
+                null,
+                2
+              ),
+            },
+          ],
+        };
+      }
+
+      const timeoutMs = currentJob.kind === "video" ? PARALLAX_VIDEO_TIMEOUT_MS : PARALLAX_IMAGE_TIMEOUT_MS;
+      const pollIntervalMs = currentJob.kind === "video" ? 4000 : 2500;
+      const startTime = Date.now();
+
+      while (Date.now() - startTime < timeoutMs) {
+        if (currentJob.status === "succeeded") {
+          return {
+            content: [
+              {
+                type: "text",
+                text: JSON.stringify(
+                  {
+                    status: "succeeded",
+                    jobId: currentJob.id,
+                    modelId: currentJob.modelId,
+                    modelName: currentJob.modelName,
+                    outputUrls: currentJob.outputUrls,
+                    prompt: currentJob.prompt,
+                    duracionMs: Date.now() - startTime,
+                    costeCreditos: currentJob.cost?.credits,
+                  },
+                  null,
+                  2
+                ),
+              },
+            ],
+          };
+        }
+        if (currentJob.status === "failed") {
+          const fallbackHint = currentJob.fallbackModels?.length
+            ? ` | Modelos alternativos sugeridos: ${currentJob.fallbackModels.map((m) => m.id).join(", ")}`
+            : "";
+          throw new Error(
+            `El reintento falló: ${currentJob.error || "Error del proveedor"} (jobId: ${currentJob.id})${fallbackHint}`
+          );
+        }
+        await new Promise((r) => setTimeout(r, pollIntervalMs));
+        const polled = await apiRequest(`/api/v1/jobs/${currentJob.id}`);
+        if (polled?.job) currentJob = polled.job;
+      }
+
+      return {
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify(
+              {
+                status: "processing",
+                jobId: currentJob.id,
+                modelId: currentJob.modelId,
+                progress: currentJob.progress,
               },
               null,
               2
@@ -412,6 +614,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         aspectRatio: args.aspectRatio || "16:9",
         resolution: args.resolution || PARALLAX_IMAGE_RESOLUTION,
         negativePrompt: args.negativePrompt,
+        ...(args.assistedLook ? { assistedLook: args.assistedLook } : {}),
+        ...(args.shotFraming ? { shotFraming: args.shotFraming } : {}),
         ...(args.imageUrl ? { imageUrl: args.imageUrl } : {}),
         ...(mediaInputs.length > 0 ? { mediaInputs } : {}),
       };
@@ -434,6 +638,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                   status: "submitted",
                   jobId: job.id,
                   modelId: job.modelId,
+                  cinema: job.cinema,
                   costeCreditos: job.cost?.credits,
                   mensaje: `Trabajo de imagen enviado con éxito. Consulta el estado con parallax_get_job con id: ${job.id}`,
                 },
@@ -461,7 +666,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                     jobId: currentJob.id,
                     modelId: currentJob.modelId,
                     outputUrls: currentJob.outputUrls,
-                    prompt: currentJob.request?.prompt,
+                    prompt: currentJob.prompt || currentJob.request?.prompt,
+                    cinema: currentJob.cinema,
                     duracionMs: Date.now() - startTime,
                     costeCreditos: currentJob.cost?.credits,
                   },
@@ -474,8 +680,11 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         }
 
         if (currentJob.status === "failed") {
+          const fallbackHint = currentJob.fallbackModels?.length
+            ? ` | Conmutación 1 clic disponible con parallax_retry_job hacia: ${currentJob.fallbackModels.map((m) => m.id).join(", ")}`
+            : "";
           const err = new Error(
-            `La generación falló: ${currentJob.error || "Error del proveedor"} (jobId: ${currentJob.id})`
+            `La generación falló: ${currentJob.error || "Error del proveedor"} (jobId: ${currentJob.id})${fallbackHint}`
           );
           err.jobId = currentJob.id;
           err.errorCode = currentJob.errorCode;
@@ -538,6 +747,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         aspectRatio: args.aspectRatio || "16:9",
         resolution: args.resolution || PARALLAX_VIDEO_RESOLUTION,
         duration: args.duration || 5,
+        ...(args.assistedLook ? { assistedLook: args.assistedLook } : {}),
+        ...(args.shotFraming ? { shotFraming: args.shotFraming } : {}),
         ...(args.imageUrl ? { imageUrl: args.imageUrl } : {}),
         ...(mediaInputs.length > 0 ? { mediaInputs } : {}),
       };
@@ -560,6 +771,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                   status: "submitted",
                   jobId: job.id,
                   modelId: job.modelId,
+                  cinema: job.cinema,
                   costeCreditos: job.cost?.credits,
                   mensaje: `Trabajo de video enviado. Consulta el avance con parallax_get_job con id: ${job.id}`,
                 },
@@ -586,7 +798,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                     jobId: currentJob.id,
                     modelId: currentJob.modelId,
                     outputUrls: currentJob.outputUrls,
-                    prompt: currentJob.request?.prompt,
+                    prompt: currentJob.prompt || currentJob.request?.prompt,
+                    cinema: currentJob.cinema,
                     duracionMs: Date.now() - startTime,
                     costeCreditos: currentJob.cost?.credits,
                   },
@@ -599,8 +812,11 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         }
 
         if (currentJob.status === "failed") {
+          const fallbackHint = currentJob.fallbackModels?.length
+            ? ` | Conmutación 1 clic disponible con parallax_retry_job hacia: ${currentJob.fallbackModels.map((m) => m.id).join(", ")}`
+            : "";
           const err = new Error(
-            `La generación de video falló: ${currentJob.error || "Error del proveedor"} (jobId: ${currentJob.id})`
+            `La generación de video falló: ${currentJob.error || "Error del proveedor"} (jobId: ${currentJob.id})${fallbackHint}`
           );
           err.jobId = currentJob.id;
           err.errorCode = currentJob.errorCode;
@@ -666,6 +882,12 @@ server.setRequestHandler(ListResourcesRequestSchema, async () => {
         description: "Lista de todos los modelos de imagen y video disponibles en PARALLAX Studio.",
       },
       {
+        uri: "parallax://cinema-presets",
+        name: "Estilos Ópticos (Modo Asistido y Presets de Cámara)",
+        mimeType: "application/json",
+        description: "Atmósferas del Modo Asistido, opciones de encuadre intuitivo y presets de óptica física de Cinema Studio.",
+      },
+      {
         uri: "parallax://balance",
         name: "Balance de Créditos",
         mimeType: "application/json",
@@ -678,13 +900,34 @@ server.setRequestHandler(ListResourcesRequestSchema, async () => {
 server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
   const uri = request.params.uri;
   if (uri === "parallax://models") {
-    const data = await apiRequest("/api/v1/models");
+    const data = await getCachedCatalog();
     return {
       contents: [
         {
           uri,
           mimeType: "application/json",
-          text: JSON.stringify(data, null, 2),
+          text: JSON.stringify({ models: data.models }, null, 2),
+        },
+      ],
+    };
+  }
+
+  if (uri === "parallax://cinema-presets") {
+    const data = await getCachedCatalog();
+    return {
+      contents: [
+        {
+          uri,
+          mimeType: "application/json",
+          text: JSON.stringify(
+            {
+              assistedLooks: data.assistedLooks || [],
+              shotFramings: data.shotFramings || [],
+              cinemaPresets: data.cinemaPresets || [],
+            },
+            null,
+            2
+          ),
         },
       ],
     };
