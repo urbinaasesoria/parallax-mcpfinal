@@ -33,8 +33,8 @@ Añade lo siguiente en tu archivo de configuración de Claude Desktop:
       "command": "node",
       "args": ["E:/DEEPSEEK/REA-Higgsfield/bin/index.mjs"],
       "env": {
-        "PARALLAX_URL": "https://parallax-studio-two.vercel.app",
-        "PARALLAX_API_KEY": "urbina2026",
+        "PARALLAX_URL": "https://parallax.urbinaaei.com",
+        "PARALLAX_API_KEY": "px_live_tu_api_key_aqui",
         "PARALLAX_IMAGE_RESOLUTION": "2K",
         "PARALLAX_VIDEO_RESOLUTION": "1080p"
       }
@@ -50,8 +50,8 @@ Ejecuta en tu terminal:
 
 ```bash
 claude mcp add parallax node E:/DEEPSEEK/REA-Higgsfield/bin/index.mjs \
-  -e PARALLAX_URL=https://parallax-studio-two.vercel.app \
-  -e PARALLAX_API_KEY=urbina2026
+  -e PARALLAX_URL=https://parallax.urbinaaei.com \
+  -e PARALLAX_API_KEY=px_live_tu_api_key_aqui
 ```
 
 ---
@@ -62,8 +62,8 @@ En Cursor, abre **Settings > Features > MCP > Add New MCP Server**:
 - **Type:** `command`
 - **Command:** `node E:/DEEPSEEK/REA-Higgsfield/bin/index.mjs`
 - **Environment variables:**
-  - `PARALLAX_URL`: `https://parallax-studio-two.vercel.app`
-  - `PARALLAX_API_KEY`: `urbina2026`
+  - `PARALLAX_URL`: `https://parallax.urbinaaei.com`
+  - `PARALLAX_API_KEY`: `px_live_tu_api_key_aqui`
 
 O añade directamente a `.cursor/mcp.json`:
 
@@ -74,8 +74,8 @@ O añade directamente a `.cursor/mcp.json`:
       "command": "node",
       "args": ["./bin/index.mjs"],
       "env": {
-        "PARALLAX_URL": "https://parallax-studio-two.vercel.app",
-        "PARALLAX_API_KEY": "urbina2026"
+        "PARALLAX_URL": "https://parallax.urbinaaei.com",
+        "PARALLAX_API_KEY": "px_live_tu_api_key_aqui"
       }
     }
   }
@@ -94,8 +94,8 @@ Añade a tu `mcp_config.json`:
       "command": "node",
       "args": ["E:/DEEPSEEK/REA-Higgsfield/bin/index.mjs"],
       "env": {
-        "PARALLAX_URL": "https://parallax-studio-two.vercel.app",
-        "PARALLAX_API_KEY": "urbina2026",
+        "PARALLAX_URL": "https://parallax.urbinaaei.com",
+        "PARALLAX_API_KEY": "px_live_tu_api_key_aqui",
         "PARALLAX_IMAGE_RESOLUTION": "2K",
         "PARALLAX_VIDEO_RESOLUTION": "1080p"
       }
@@ -110,8 +110,8 @@ Añade a tu `mcp_config.json`:
 
 | Variable | Valor por defecto | Descripción |
 | :--- | :--- | :--- |
-| `PARALLAX_URL` | `https://parallax-studio-two.vercel.app` | URL de tu despliegue en Vercel o `http://localhost:3000` si ejecutas en local. |
-| `PARALLAX_API_KEY` | `urbina2026` | Clave de Administrador con Créditos Ilimitados o una API Key `pk_...` generada en Ajustes. |
+| `PARALLAX_URL` | `https://parallax.urbinaaei.com` | URL de tu despliegue en Vercel o `http://localhost:3000` si ejecutas en local. |
+| `PARALLAX_API_KEY` | `px_live_tu_api_key_aqui` | Clave de Administrador con Créditos Ilimitados o una API Key `pk_...` generada en Ajustes. |
 | `PARALLAX_IMAGE_RESOLUTION` | `2K` | Resolución de imagen por defecto (`1K`, `2K`, `4K`). `2K` preserva la relación de aspecto 16:9 correcta. |
 | `PARALLAX_VIDEO_RESOLUTION` | `1080p` | Resolución de video por defecto (`720p`, `1080p`). |
 | `PARALLAX_IMAGE_TIMEOUT_MS` | `300000` (5 min) | Tiempo máximo de espera para generación de imágenes. |

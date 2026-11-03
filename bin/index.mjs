@@ -18,8 +18,8 @@ import {
 } from "@modelcontextprotocol/sdk/types.js";
 
 const VERSION = "1.3.0";
-const PARALLAX_URL = (process.env.PARALLAX_URL || "https://parallax-studio-two.vercel.app").replace(/\/$/, "");
-const PARALLAX_API_KEY = process.env.PARALLAX_API_KEY || "urbina2026";
+const PARALLAX_URL = (process.env.PARALLAX_URL || process.env.PARALLAX_BASE_URL || "https://parallax.urbinaaei.com").replace(/\/$/, "");
+const PARALLAX_API_KEY = process.env.PARALLAX_API_KEY || "";
 const PARALLAX_IMAGE_RESOLUTION = process.env.PARALLAX_IMAGE_RESOLUTION || "2K";
 const PARALLAX_VIDEO_RESOLUTION = process.env.PARALLAX_VIDEO_RESOLUTION || "1080p";
 const PARALLAX_IMAGE_TIMEOUT_MS = Number(process.env.PARALLAX_IMAGE_TIMEOUT_MS) || 300_000; // 5m
@@ -223,6 +223,18 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
             referenceImageUrl: {
               type: "string",
               description: "URL opcional de referencia de personaje (character_reference) para mantener consistencia de identidad.",
+            },
+            audioUrl: {
+              type: "string",
+              description: "URL opcional de pista de voz/audio (MP3/WAV) para modelos de Lip Sync (ej: 'infinitetalk-image-to-video', 'veed-lipsync', 'sync-lipsync').",
+            },
+            videoUrl: {
+              type: "string",
+              description: "URL opcional de vídeo base para modelos de Lip Sync Video-to-Video (ej: 'infinitetalk-video-to-video', 'latent-sync').",
+            },
+            generateAudio: {
+              type: "boolean",
+              description: "Si es true (por defecto), solicita generación de audio nativo en los modelos que lo soportan (ej: Veo 3.1, Kling 3.0, Seedance 2.0).",
             },
             assistedLook: {
               type: "string",
@@ -738,15 +750,22 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       if (args.referenceImageUrl) {
         mediaInputs.push({ url: args.referenceImageUrl, role: "character_reference" });
       }
+      if (args.audioUrl) {
+        mediaInputs.push({ url: args.audioUrl, role: "audio_track" });
+      }
+      if (args.videoUrl) {
+        mediaInputs.push({ url: args.videoUrl, role: "video_input" });
+      }
 
-      const mode = mediaInputs.length > 0 ? "image-to-video" : "text-to-video";
+      const mode = args.audioUrl ? "lipsync" : mediaInputs.length > 0 ? "image-to-video" : "text-to-video";
       const payload = {
         modelId,
         mode,
-        prompt: args.prompt,
+        prompt: args.prompt || "",
         aspectRatio: args.aspectRatio || "16:9",
         resolution: args.resolution || PARALLAX_VIDEO_RESOLUTION,
         duration: args.duration || 5,
+        generateAudio: args.generateAudio !== false,
         ...(args.assistedLook ? { assistedLook: args.assistedLook } : {}),
         ...(args.shotFraming ? { shotFraming: args.shotFraming } : {}),
         ...(args.imageUrl ? { imageUrl: args.imageUrl } : {}),
