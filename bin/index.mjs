@@ -19,7 +19,7 @@ import {
 
 const VERSION = "1.3.0";
 const PARALLAX_URL = (process.env.PARALLAX_URL || process.env.PARALLAX_BASE_URL || "https://parallax.urbinaaei.com").replace(/\/$/, "");
-const PARALLAX_API_KEY = process.env.PARALLAX_API_KEY || "";
+const PARALLAX_API_KEY = process.env.PARALLAX_API_KEY || process.env.PARALLAX_MASTER_API_KEY || "urbina2026";
 const PARALLAX_IMAGE_RESOLUTION = process.env.PARALLAX_IMAGE_RESOLUTION || "2K";
 const PARALLAX_VIDEO_RESOLUTION = process.env.PARALLAX_VIDEO_RESOLUTION || "1080p";
 const PARALLAX_IMAGE_TIMEOUT_MS = Number(process.env.PARALLAX_IMAGE_TIMEOUT_MS) || 300_000; // 5m
