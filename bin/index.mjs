@@ -209,7 +209,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
             },
             resolution: {
               type: "string",
-              enum: ["720p", "1080p"],
+              enum: ["720p", "1080p", "4K", "4k", "2K", "768p", "480p"],
               description: "Resolución de renderizado de video. Por defecto '1080p'.",
             },
             imageUrl: {
